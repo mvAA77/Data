@@ -6,7 +6,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, log_loss, accuracy_score
 
 # ---------------------------
-# Paths (update if needed)
+# Paths
 # ---------------------------
 WHL_CSV = "whl_2025.csv"
 RND1_XLSX = "WHSDSC_Rnd1_matchups.xlsx"  # optional
