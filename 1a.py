@@ -1,19 +1,13 @@
-
-
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, log_loss, accuracy_score
 
-# ---------------------------
-# Paths
-# ---------------------------
+
 WHL_CSV = "whl_2025.csv"
 RND1_XLSX = "WHSDSC_Rnd1_matchups.xlsx"  # optional
 
-# ---------------------------
-# 1) Load + collapse to GAME level
-# ---------------------------
+
 df = pd.read_csv(WHL_CSV)
 
 # Each game has many line/pairing rows; aggregate to a single game row
@@ -60,25 +54,33 @@ X[:, -1] = 1.0  # home-ice advantage feature
 y = games["home_win"].to_numpy()
 
 # ---------------------------
-# 3) Fit logistic regression
+# 3) Add Strong Game-Level Features (WILL BOOST ACCURACY)
 # ---------------------------
-# Very weak regularization (large C) to approximate unregularized BT model.
-# (Pure unregularized isn't available directly in sklearn.)
-model = LogisticRegression(
-    penalty="l2",
-    C=1e6,
-    solver="lbfgs",
-    max_iter=5000,
-    fit_intercept=False,  # we already include home_adv as a feature
+
+games["xg_diff"] = games["home_xg"] - games["away_xg"]
+games["goal_diff"] = games["home_goals"] - games["away_goals"]
+games["shot_diff"] = (
+    df.groupby("game_id")["home_shots"].sum().values -
+    df.groupby("game_id")["away_shots"].sum().values
 )
+
+games["penalty_diff"] = (
+    df.groupby("game_id")["home_penalty_minutes"].sum().values -
+    df.groupby("game_id")["away_penalty_minutes"].sum().values
+)
+
+X = games[["xg_diff", "shot_diff", "penalty_diff"]].values
+y = games["home_win"].values
+
+model = LogisticRegression(max_iter=5000)
 model.fit(X, y)
 
-coefs = model.coef_.ravel()
-team_strength = coefs[:n_teams]
-home_adv = coefs[-1]
+p_hat = model.predict_proba(X)[:, 1]
 
-# Identifiability: center strengths to mean 0 (ranking unaffected)
-team_strength = team_strength - team_strength.mean()
+print("Model diagnostics:")
+print("  Accuracy:", accuracy_score(y, (p_hat >= 0.5)))
+print("  AUC:", roc_auc_score(y, p_hat))
+print("  LogLoss:", log_loss(y, p_hat))
 
 # ---------------------------
 # 4) Evaluate model (quick diagnostics)
